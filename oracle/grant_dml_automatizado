@@ -1,0 +1,153 @@
+/*
+Este script cria um package PL/SQL para automatizar concessões de privilégios (GRANTs) em objetos de um ou mais schemas para uma role.
+O objetivo é evitar executar GRANT manualmente em centenas de objetos, automatizando a concessão de privilégios em:
+  Tabelas → SELECT, INSERT, UPDATE, DELETE
+  Procedures → EXECUTE
+
+O script também possui modo de simulação (dry-run) e registro em log, permitindo validar os comandos antes da execução real.
+Permite apenas simular, validar e/ou executar os grants diretamente. 
+*/
+
+--1️⃣ Package Specification
+--Define a procedure principal responsável por gerar e aplicar os GRANTs.
+
+CREATE OR REPLACE PACKAGE sec_grant_mgr AS
+  PROCEDURE grant_role_for_owners(
+    p_role      IN VARCHAR2,
+    p_owners    IN SYS.ODCIVARCHAR2LIST,
+    p_dry_run   IN BOOLEAN DEFAULT FALSE
+  );
+END sec_grant_mgr;
+/
+
+--2️⃣ Tabela de Log
+--Tabela utilizada para registrar todos os GRANTs gerados e executados.
+
+CREATE TABLE sec_grant_log (
+  log_id      NUMBER GENERATED ALWAYS AS IDENTITY,
+  log_ts      TIMESTAMP DEFAULT SYSTIMESTAMP,
+  role_name   VARCHAR2(128),
+  owner_name  VARCHAR2(128),
+  obj_type    VARCHAR2(30),
+  obj_name    VARCHAR2(128),
+  stmt        CLOB,
+  status      VARCHAR2(10),
+  err_msg     VARCHAR2(4000)
+);
+
+--3️⃣ Package Body
+--Implementa a lógica responsável por:
+--gerar os comandos GRANT
+--executar ou apenas simular
+--registrar resultado no log
+
+CREATE OR REPLACE PACKAGE BODY sec_grant_mgr AS
+  PROCEDURE log_stmt(
+    p_role   VARCHAR2,
+    p_owner  VARCHAR2,
+    p_type   VARCHAR2,
+    p_name   VARCHAR2,
+    p_stmt   CLOB,
+    p_status VARCHAR2,
+    p_err    VARCHAR2
+  ) IS
+  BEGIN
+    INSERT INTO sec_grant_log(role_name, owner_name, obj_type, obj_name, stmt, status, err_msg)
+    VALUES (UPPER(p_role), UPPER(p_owner), p_type, p_name, p_stmt, p_status, p_err);
+  END;
+
+  PROCEDURE exec_sql(
+    p_role    VARCHAR2,
+    p_owner   VARCHAR2,
+    p_type    VARCHAR2,
+    p_name    VARCHAR2,
+    p_sql     CLOB,
+    p_dry_run BOOLEAN
+  ) IS
+  BEGIN
+    IF NOT p_dry_run THEN
+      EXECUTE IMMEDIATE p_sql;
+    END IF;
+
+    log_stmt(p_role, p_owner, p_type, p_name, p_sql, 'OK', NULL);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      log_stmt(p_role, p_owner, p_type, p_name, p_sql, 'ERROR', SQLERRM);
+  END;
+
+  PROCEDURE grant_role_for_owners(
+    p_role      IN VARCHAR2,
+    p_owners    IN SYS.ODCIVARCHAR2LIST,
+    p_dry_run   IN BOOLEAN DEFAULT FALSE
+  ) IS
+  BEGIN
+
+    -- Concede privilégios DML em todas as tabelas
+    FOR t IN (
+      SELECT owner, table_name
+      FROM   dba_tables
+      WHERE  owner IN (SELECT UPPER(column_value) FROM TABLE(p_owners))
+    ) LOOP
+      exec_sql(
+        p_role, t.owner, 'TABLE', t.table_name,
+        'GRANT SELECT, INSERT, UPDATE, DELETE ON ' || t.owner || '.' || t.table_name || ' TO ' || p_role,
+        p_dry_run
+      );
+    END LOOP;
+
+    -- Concede EXECUTE em procedures, functions e packages
+    FOR o IN (
+      SELECT owner, object_name, object_type
+      FROM   dba_objects
+      WHERE  owner IN (SELECT UPPER(column_value) FROM TABLE(p_owners))
+      AND    object_type IN ('PROCEDURE','FUNCTION','PACKAGE')
+    ) LOOP
+      exec_sql(
+        p_role, o.owner, o.object_type, o.object_name,
+        'GRANT EXECUTE ON ' || o.owner || '.' || o.object_name || ' TO ' || p_role,
+        p_dry_run
+      );
+    END LOOP;
+
+    COMMIT;
+
+  END;
+
+END sec_grant_mgr;
+/
+
+--Exemplo de Uso
+--Dry Run (Simulação)
+--Gera os comandos GRANT e registra no log, mas não executa.
+BEGIN
+  sec_grant_mgr.grant_role_for_owners(
+    p_role    => 'APP_DML_ROLE',
+    p_owners  => SYS.ODCIVARCHAR2LIST('<owner>'),
+    p_dry_run => TRUE
+  );
+END;
+/
+
+--Verificar os comandos gerados na tabela de log
+SELECT stmt
+FROM sec_grant_log
+WHERE role_name = 'APP_DML_ROLE'
+ORDER BY log_id;
+
+--Executar os GRANTs efetivamente 
+--Após validar o dry run:
+BEGIN
+  sec_grant_mgr.grant_role_for_owners(
+    p_role    => 'APP_DML_ROLE',
+    p_owners  => SYS.ODCIVARCHAR2LIST('<owner>'),
+    p_dry_run => FALSE
+  );
+END;
+/
+
+--Validar privilégios aplicados diretamente ao usuario.
+SELECT owner, table_name, privilege
+FROM dba_tab_privs
+WHERE grantee = 'APP_DML_ROLE'
+AND owner = '<owner>';
