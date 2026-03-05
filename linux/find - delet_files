@@ -1,14 +1,41 @@
---Deletar arquivos entre duas datas.
-# ver arquivos modificados de 2025-08-01 a 2025-08-15
-find . -type f -newermt '2024-02-01' ! -newermt '2025-02-01' -print 
+/* ==========================================================================================================
+Script: cleanup_files_by_date.sh
+Autor: Francois Fiorino
+Data: 05/03/2026
 
-# apagar
+Descrição:
+  Este script demonstra comandos utilizando a ferramenta "find" para localizar e remover arquivos com base
+  em critérios de data de modificação.
+  Ele pode ser utilizado para tarefas de manutenção em servidores Linux/Unix, como limpeza de diretórios,
+  remoção de arquivos antigos ou gerenciamento de espaço em disco.
+
+Funcionalidades:
+  - Localizar arquivos modificados entre duas datas específicas
+  - Remover arquivos dentro de um intervalo de datas
+  - Identificar arquivos com mais de N dias de modificação
+  - Remover arquivos antigos automaticamente
+
+Instruções de uso:
+  1. Ajustar o diretório ou caminho desejado nos comandos.
+  2. Sempre executar primeiro os comandos com "-print" para validar os arquivos que serão afetados.
+  3. Após validação, executar a versão com "-delete" para remover os arquivos.
+
+Compatibilidade:
+  Linux / Unix (distribuições que possuam o utilitário GNU find)
+========================================================================================================== */
+
+-- Deletar arquivos entre duas datas
+# visualizar arquivos modificados entre duas datas
+find . -type f -newermt '2024-02-01' ! -newermt '2025-02-01' -print
+
+# apagar arquivos dentro do intervalo de datas
 find . -type f -newermt '2024-02-01' ! -newermt '2025-02-01' -delete
 find . -type f -newermt '2025-02-01' ! -newermt '2025-07-31' -delete
 
---Deletar aquivos com mais de 30 dias.
-# ver antes
+
+-- Deletar arquivos com mais de 30 dias
+# visualizar antes de remover
 find /caminho -type f -mtime +30 -print
 
-# apagar
-find /caminho -type f -mtime +30 -delet
+# apagar arquivos com mais de 30 dias
+find /caminho -type f -mtime +30 -delete
