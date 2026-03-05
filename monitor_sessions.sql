@@ -1,3 +1,38 @@
+/* ==========================================================================================================
+   Script: monitor_sessions.sql
+   Autor: [Francois Fiorino]
+   Data: [05/03/2026]
+   Descrição:
+       Este script exibe informações detalhadas sobre sessões ativas no banco de dados Oracle em ambiente RAC
+       ou não-RAC, utilizando as visões gv$session, gv$process e v$sesstat. Ele auxilia na monitoração,
+       diagnóstico e análise de sessões de usuários, consumos de CPU, waits e tempo da última ação.
+
+   Funcionalidades:
+       - Identifica sessões ativas, inativas e em espera (waits).
+       - Mostra detalhes como usuário, máquina cliente, programa, SQL_ID atual e anterior.
+       - Inclui informações de CPU, memória UGA/PGA, commits e rollbacks por sessão.
+       - Suporta filtros opcionais por variáveis definidas no início (CLIENT_IDENTIFIER, MODULE, MACHINE, etc.)
+         sem necessidade de alterar o SQL.
+
+   Instruções de uso:
+       1. Execute o script em uma sessão SQL*Plus, SQLcl ou SQL Developer.
+       2. Caso queira aplicar filtros, edite as variáveis "define" no início do script.
+          Exemplo:
+              define STATUS='ACTIVE'
+              define MODULE='SQL Developer'
+       3. Se deixar os filtros vazios, o script retorna todas as sessões de usuários (excluindo BACKGROUND e SYSTEM).
+
+   Compatibilidade:
+       - Oracle Database 12c e superiores.
+       - Ambientes RAC (usa gv$ views).
+   
+   Observação:
+       - Este script não realiza alterações, apenas consulta.
+       - Certifique-se de ter privilégios de acesso às visões gv$session, gv$process e v$sesstat.
+
+   ========================================================================================================== */
+
+
 set define on
 set verify off
 set feedback on
@@ -11,11 +46,6 @@ col SESSIONWAIT     for a30
 col LOGON_TIME      for a17
 col LAST_ACAO       for a17
 col INST_ID         for 99
--- ======================================================================
--- Filtros (vazios = sem filtro aplicado)
--- Querie ja vem preparada com os filtros, caso queira filtrar, 
--- especifique os filtros diretamente nas variaveis, nao altere o sql.
--- ======================================================================
 define CLIENT_IDENTIFIER=''
 define MACHINE=''
 define MODULE='SQL Developer'
@@ -97,12 +127,6 @@ left join gv$process p
 where s.username is not null
   and nvl(s.osuser,'x') <> 'SYSTEM'
   and s.type <> 'BACKGROUND'
--- =========================
--- Filtros opcionais --
--- A comparação é exata, quando especificado a variavel.
--- Ausencia de filtro é aplicado ALL ou seja, a execuçao irá ser feita até a 
--- linha 99, ou seja, sem filtro aplicados. 
--- =========================
 AND (
   COALESCE(TRIM(UPPER('&CLIENT_IDENTIFIER')), 'ALL') = 'ALL'
   OR UPPER(NVL(s.client_identifier, '')) = TRIM(UPPER('&CLIENT_IDENTIFIER'))
