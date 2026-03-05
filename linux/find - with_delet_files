@@ -1,0 +1,13 @@
+--Deletar arquivos entre duas datas.
+# ver arquivos modificados de 2025-08-01 a 2025-08-15
+find . -type f -newermt '2024-02-01' ! -newermt '2025-02-01' -print 
+
+# apagar
+find . -type f -newermt '2024-02-01' ! -newermt '2025-02-01' -delete
+find . -type f -newermt '2025-02-01' ! -newermt '2025-07-31' -delete
+
+--Deletar aquivos com mais de 30 dias.
+# ver antes
+find /caminho -type f -mtime +30 -print
+# apagar
+find /caminho -type f -mtime +30 -delet
